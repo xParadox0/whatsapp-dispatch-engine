@@ -1,0 +1,9 @@
+{
+  "execution_id": 21,
+  "received_at": "2026-09-13T19:19:12.119Z",
+  "source": "Meta WhatsApp Cloud API status callback",
+  "status": "failed",
+  "recipient_id": "62XXXXXXXXXXX (redacted)",
+  "error_code": 130497,
+  "error_title": "Business account is restricted from messaging users in this country."
+}

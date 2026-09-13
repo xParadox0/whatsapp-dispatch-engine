@@ -1,0 +1,329 @@
+{
+  "name": "WhatsApp Dispatch",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "whatsapp-dispatch",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-in",
+      "name": "WhatsApp Inbound",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -360,
+        0
+      ],
+      "webhookId": "whatsapp-dispatch-inbound"
+    },
+    {
+      "parameters": {
+        "jsCode": "\n// Dispatch brain: session window, supplier ranking, acceptance locking.\n// State lives in workflow static data so it survives an n8n restart.\nconst store = $getWorkflowStaticData('global');\nstore.jobs = store.jobs || {};\nstore.offers = store.offers || [];\nstore.inbound = store.inbound || {};\n\nconst DAY = 24 * 60 * 60 * 1000;\nconst OFFER_TIMEOUT_MS = 5 * 60 * 1000;\nconst now = Date.now();\n\n// Suppliers would normally come from a Google Sheet. Kept inline so the\n// workflow runs before the Sheet credential exists.\nconst SUPPLIERS = [\n  // Demo supplier points at the number registered on the Meta test number,\n  // so the outbound leg is observable. Real deployments read this from a sheet.\n  { id: 'sup-1', name: 'Highway Tyres', phone: '<RECIPIENT_MSISDN>', km: 8.2 },\n  { id: 'sup-2', name: 'N1 Truck Assist', phone: '27820001002', km: 14.7 },\n  { id: 'sup-3', name: 'Midrand Fitment', phone: '27820001003', km: 31.5 },\n];\n\nconst body = $input.first().json.body || $input.first().json;\nconst value = body?.entry?.[0]?.changes?.[0]?.value;\nconst message = value?.messages?.[0];\n\nif (!message) {\n  return [{ json: { action: 'ignore', reason: 'no message in payload' } }];\n}\n\nconst from = message.from;\nconst text = (message.text?.body || '').trim();\nstore.inbound[from] = now;                       // opens this contact's 24h window\n\n// A supplier replying YES <reference> accepts the job.\nconst accept = text.match(/^\\s*(yes|ya|accept|ambil)\\s+(\\S+)/i);\nif (accept) {\n  const reference = accept[2].toUpperCase();\n  const job = Object.values(store.jobs).find(j => j.reference === reference);\n  const supplier = SUPPLIERS.find(s => s.phone === from);\n\n  if (!job) {\n    return [{ json: { action: 'reply', to: from, windowOpen: true,\n                      text: `No open job found for ${reference}.` } }];\n  }\n  if (job.assignedSupplierId) {\n    // First acceptance already won. This is the idempotent branch.\n    const already = job.assignedSupplierId === supplier?.id;\n    return [{ json: { action: 'reply', to: from, windowOpen: true, jobId: job.id,\n                      outcome: already ? 'assigned' : 'already_assigned',\n                      text: already\n                        ? 'You already have this job. Please send an ETA.'\n                        : 'This job is already assigned to another supplier. No action needed.' } }];\n  }\n\n  job.assignedSupplierId = supplier?.id || from;\n  job.status = 'assigned';\n  job.assignedAt = now;\n  store.offers.forEach(o => { if (o.jobId === job.id) o.resolved = true; });\n\n  return [{ json: { action: 'assign', to: from, windowOpen: true, jobId: job.id,\n                    reference: job.reference, outcome: 'assigned',\n                    text: 'Job assigned to you. Please proceed and send an ETA.',\n                    clientPhone: job.clientPhone } }];\n}\n\n// Anything else from a new contact is treated as a breakdown report.\nconst reference = 'JOB' + String(Object.keys(store.jobs).length + 1).padStart(4, '0');\nconst job = {\n  id: reference, reference, detail: text, clientPhone: from,\n  status: 'pending', createdAt: now, triedSupplierIds: [], assignedSupplierId: null,\n};\nstore.jobs[reference] = job;\n\nconst nextSupplier = SUPPLIERS[0];\njob.triedSupplierIds.push(nextSupplier.id);\njob.status = 'offered';\nstore.offers.push({ jobId: job.id, supplierId: nextSupplier.id,\n                    expiresAt: now + OFFER_TIMEOUT_MS, resolved: false });\n\n// Window check decides free-form vs approved template for the supplier message.\nconst supplierLastInbound = store.inbound[nextSupplier.phone] || 0;\nconst supplierWindowOpen = (now - supplierLastInbound) <= DAY;\n\nreturn [{\n  json: {\n    action: 'dispatch',\n    jobId: job.id,\n    reference,\n    detail: text,\n    clientPhone: from,\n    clientWindowOpen: true,\n    supplier: nextSupplier,\n    supplierWindowOpen,\n    supplierMessageType: supplierWindowOpen ? 'text' : 'template',\n    clientText: `Got it. Reference ${reference}. Finding the closest fitment now.`,\n  },\n}];\n"
+      },
+      "id": "dispatch-brain",
+      "name": "Dispatch Brain",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -140,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "dispatch",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "dispatch"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "assign",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "assign"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "reply",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "reply"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "none"
+        }
+      },
+      "id": "route",
+      "name": "Route Action",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        80,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v21.0/{{ $env.WHATSAPP_PHONE_NUMBER_ID }}/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.WHATSAPP_TOKEN }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.supplierWindowOpen\n  ? { messaging_product: \"whatsapp\", to: $json.supplier.phone, type: \"text\",\n      text: { body: \"New job \" + $json.reference + \": \" + $json.detail + \". Reply YES \" + $json.reference + \" to accept.\" } }\n  : { messaging_product: \"whatsapp\", to: $json.supplier.phone, type: \"template\",\n      template: { name: \"job_dispatch\", language: { code: \"en\" },\n        components: [{ type: \"body\", parameters: [\n          { type: \"text\", text: $json.reference },\n          { type: \"text\", text: $json.detail } ] }] } }) }}",
+        "options": {}
+      },
+      "id": "send-supplier",
+      "name": "Send To Supplier",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        320,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v21.0/{{ $env.WHATSAPP_PHONE_NUMBER_ID }}/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.WHATSAPP_TOKEN }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: \"whatsapp\", to: $('Dispatch Brain').first().json.clientPhone || $('Dispatch Brain').first().json.to, type: \"text\", text: { body: $('Dispatch Brain').first().json.clientText || $('Dispatch Brain').first().json.text || \"Update on your job.\" } }) }}",
+        "options": {}
+      },
+      "id": "send-client",
+      "name": "Reply To Sender",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        320,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: \"ok\" }) }}",
+        "options": {}
+      },
+      "id": "respond",
+      "name": "Ack To Meta",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        560,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "whatsapp-dispatch",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "meta-verify",
+      "name": "Meta Verify (GET)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -360,
+        260
+      ],
+      "webhookId": "whatsapp-dispatch-verify"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Meta webhook verification handshake.\n// Echo hub.challenge back verbatim, but only when the verify token matches.\n//\n// The token is a constant rather than $env because n8n ships\n// N8N_BLOCK_ENV_ACCESS_IN_NODE=true, which denies $env inside Code nodes.\n// This value only proves the endpoint is ours during Meta's one-time\n// handshake. It grants no access to anything.\nconst EXPECTED = 'SET_YOUR_OWN_VERIFY_TOKEN';\n\nconst query = $input.first().json.query || {};\n\nif (query['hub.mode'] === 'subscribe' && query['hub.verify_token'] === EXPECTED) {\n  return [{ json: { ok: true, challenge: query['hub.challenge'] } }];\n}\nreturn [{ json: { ok: false, challenge: 'verification failed' } }];\n"
+      },
+      "id": "verify-check",
+      "name": "Check Verify Token",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -140,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.challenge }}",
+        "options": {
+          "responseCode": "={{ $json.ok ? 200 : 403 }}"
+        }
+      },
+      "id": "verify-respond",
+      "name": "Echo Challenge",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        80,
+        260
+      ]
+    }
+  ],
+  "connections": {
+    "WhatsApp Inbound": {
+      "main": [
+        [
+          {
+            "node": "Dispatch Brain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dispatch Brain": {
+      "main": [
+        [
+          {
+            "node": "Route Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Action": {
+      "main": [
+        [
+          {
+            "node": "Send To Supplier",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reply To Sender",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reply To Sender",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send To Supplier": {
+      "main": [
+        [
+          {
+            "node": "Reply To Sender",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reply To Sender": {
+      "main": [
+        [
+          {
+            "node": "Ack To Meta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Meta Verify (GET)": {
+      "main": [
+        [
+          {
+            "node": "Check Verify Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Verify Token": {
+      "main": [
+        [
+          {
+            "node": "Echo Challenge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

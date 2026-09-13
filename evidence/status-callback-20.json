@@ -1,0 +1,9 @@
+{
+  "execution_id": 20,
+  "received_at": "2026-09-13T19:18:14.484Z",
+  "source": "Meta WhatsApp Cloud API status callback",
+  "status": "failed",
+  "recipient_id": "62XXXXXXXXXXX (redacted)",
+  "error_code": 131047,
+  "error_title": "Re-engagement message"
+}

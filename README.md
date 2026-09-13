@@ -135,6 +135,28 @@ tests/                 23 tests, written before the implementation
 examples/              runnable end-to-end demo
 ```
 
+## This runs against the real WhatsApp Cloud API
+
+The engine below is transport-independent and tested on its own. The same logic
+also runs in production on self-hosted n8n, wired to the Meta WhatsApp Cloud API.
+
+Recorded output from that deployment is in [`evidence/`](evidence/), including the
+exported 9-node workflow and two Meta delivery status callbacks.
+
+Those callbacks are the point. The Graph API returns `HTTP 200` with a `wamid` as
+soon as it queues a message, which is not the same as delivery. Failures arrive
+later through a status webhook. Both recorded callbacks are failures that a
+naive integration would have counted as successes:
+
+```text
+131047  the 24-hour window was closed, so free-form text was refused
+130497  the account is country-restricted pending business verification
+```
+
+Error 131047 confirms the window logic reached the right answer independently.
+The dispatch step had already classified that message as `template` before Meta
+returned the same verdict.
+
 ## Scope
 
 This is a reference implementation of dispatch logic, not a deployable product.
