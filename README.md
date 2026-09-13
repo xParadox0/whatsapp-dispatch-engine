@@ -1,11 +1,28 @@
 # WhatsApp Dispatch Engine
 
+[![tests](https://github.com/xParadox0/whatsapp-dispatch-engine/actions/workflows/tests.yml/badge.svg)](https://github.com/xParadox0/whatsapp-dispatch-engine/actions/workflows/tests.yml)
+
 A small, dependency-free reference implementation of the parts of a WhatsApp
 dispatch bot that break in production rather than in testing.
 
 Built as a portfolio piece for roadside assistance, field service, and clinic
 booking automation, where a job is offered to one provider, escalated on
 timeout, and must never be dispatched twice.
+
+## See it run without installing anything
+
+**Option 1: read the CI log.** Every push runs the full suite and the demo on
+GitHub's servers. The output below is produced there, not on my machine.
+[Latest run](https://github.com/xParadox0/whatsapp-dispatch-engine/actions/workflows/tests.yml)
+
+**Option 2: run it in the browser.** Open the repository in GitHub Codespaces
+(Code, then Codespaces, then Create codespace) and run:
+
+```bash
+python3 examples/demo_dispatch.py
+```
+
+**Option 3: run it locally.** No dependencies to install.
 
 ```bash
 git clone https://github.com/xParadox0/whatsapp-dispatch-engine
