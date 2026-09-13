@@ -138,15 +138,19 @@ examples/              runnable end-to-end demo
 ## This runs against the real WhatsApp Cloud API
 
 The engine below is transport-independent and tested on its own. The same logic
-also runs in production on self-hosted n8n, wired to the Meta WhatsApp Cloud API.
+also runs on self-hosted n8n wired to the Meta WhatsApp Cloud API, where a
+message typed on a phone becomes a row on a report page.
 
-Recorded output from that deployment is in [`evidence/`](evidence/), including the
-exported 9-node workflow and two Meta delivery status callbacks.
+![Dispatch report generated from real WhatsApp messages](evidence/dispatch-report.png)
 
-Those callbacks are the point. The Graph API returns `HTTP 200` with a `wamid` as
-soon as it queues a message, which is not the same as delivery. Failures arrive
-later through a status webhook. Both recorded callbacks are failures that a
-naive integration would have counted as successes:
+Every row there came from a WhatsApp message sent by a driver. Recorded output
+from that deployment lives in [`evidence/`](evidence/), including the exported
+13-node workflow and two Meta delivery status callbacks.
+
+Those callbacks matter. The Graph API returns `HTTP 200` with a `wamid` as soon
+as it queues a message, which is not the same as delivery. Failures arrive later
+through a status webhook. Both recorded callbacks are failures that a naive
+integration would have counted as successes:
 
 ```text
 131047  the 24-hour window was closed, so free-form text was refused
