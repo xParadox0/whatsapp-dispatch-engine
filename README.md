@@ -122,10 +122,10 @@ examples/              runnable end-to-end demo
 
 This is a reference implementation of dispatch logic, not a deployable product.
 
-What it does not include: a live Meta Cloud API client, real supplier data,
-distance calculation against a mapping provider, or authentication. The
-gateway is simulated on purpose, so the state machine can be read and run
-without credentials.
+It does not include a live Meta Cloud API client, real supplier data, distance
+calculation against a mapping provider, or authentication. The gateway is
+simulated on purpose, so the state machine can be read and run without
+credentials.
 
 In a production build the same logic sits behind the real Cloud API, with
 supplier ranking driven by a mapping API and a shortlist pre-filtered by
