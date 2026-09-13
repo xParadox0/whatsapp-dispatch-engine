@@ -8,7 +8,7 @@ booking automation, where a job is offered to one provider, escalated on
 timeout, and must never be dispatched twice.
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/whatsapp-dispatch-engine
+git clone https://github.com/xParadox0/whatsapp-dispatch-engine
 cd whatsapp-dispatch-engine
 python3 -m unittest discover -s tests -q   # 23 tests
 python3 examples/demo_dispatch.py          # full flow, no credentials needed
