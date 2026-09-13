@@ -9,6 +9,7 @@ written by hand.
 
 ```text
 dispatch-report.png               the report page, rendered from real messages
+dispatch-report.csv               the same data exported as CSV
 workflow-whatsapp-dispatch.json   the 13-node n8n workflow, secrets removed
 status-callback-20.json           Meta delivery status, error 131047
 status-callback-21.json           Meta delivery status, error 130497
@@ -17,16 +18,36 @@ status-callback-21.json           Meta delivery status, error 130497
 ## The path that runs green
 
 ```text
-phone  ->  WhatsApp Cloud API  ->  webhook  ->  n8n  ->  report page
+phone  ->  WhatsApp Cloud API  ->  webhook  ->  n8n  ->  report, CSV, JSON
 ```
 
-A driver sends a plain WhatsApp message describing a breakdown. The workflow
-parses it, assigns a reference, ranks suppliers by distance, decides whether the
-24-hour session window allows free-form text or requires an approved template,
-and appends the result to a durable log. The report page renders that log.
+A driver types a breakdown in their own words, in Indonesian or English. The
+workflow reads the sentence into columns and appends it to a durable log:
 
-Every row in `dispatch-report.png` came from a message typed on a real phone.
-Phone numbers are masked in the page itself, not edited afterwards.
+```text
+plate         B1234XYZ
+fault_type    tyre
+position      front
+road          Tol Cikampek
+km            32
+language      id
+completeness  5 of 5
+```
+
+The same data leaves as a page, as `?format=csv` for a spreadsheet, or as
+`?format=json` for another system.
+
+A field the message does not state stays empty and is labelled `not stated`. An
+empty cell is a question a dispatcher can ask. A guessed plate number sends a
+truck to the wrong place, so nothing is inferred that was not written.
+
+`dispatch-report.csv` shows what that looks like in practice. One row reads
+`km 20` with every other field blank, because the message was only "tolong
+bantuan di km 20". The `completeness` column scores each row so incomplete
+reports can be chased.
+
+The extraction logic has unit tests in `tests/test_extraction.py`. The n8n node
+mirrors that reference implementation.
 
 State lives in n8n static data, so the log survives a container restart.
 

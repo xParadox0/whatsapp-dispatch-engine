@@ -143,9 +143,18 @@ message typed on a phone becomes a row on a report page.
 
 ![Dispatch report generated from real WhatsApp messages](evidence/dispatch-report.png)
 
-Every row there came from a WhatsApp message sent by a driver. Recorded output
-from that deployment lives in [`evidence/`](evidence/), including the exported
-13-node workflow and two Meta delivery status callbacks.
+Every row there came from a WhatsApp message typed on a phone, read into columns
+by the workflow. A driver writes "Truck B1234XYZ pecah ban depan, tol Cikampek
+km 32" and the report gains a row with plate, fault type, wheel position, road,
+and kilometre marker as separate fields, exportable as CSV or JSON.
+
+Fields the message never stated stay empty rather than guessed. An empty cell is
+a question a dispatcher can ask; an invented plate number sends a truck to the
+wrong place. `tests/test_extraction.py` covers that rule directly.
+
+Recorded output from that deployment lives in [`evidence/`](evidence/), including
+the exported 13-node workflow, a CSV export, and two Meta delivery status
+callbacks.
 
 Those callbacks matter. The Graph API returns `HTTP 200` with a `wamid` as soon
 as it queues a message, which is not the same as delivery. Failures arrive later
